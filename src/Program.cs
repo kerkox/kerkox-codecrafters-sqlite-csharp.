@@ -22,6 +22,7 @@ if (command == ".dbinfo")
     databaseFile.Read(pageSizeBytes, 0, 2);
     var pageSize = ReadUInt16BigEndian(pageSizeBytes);
     Console.WriteLine($"database page size: {pageSize}");
+    Console.WriteLine($"database page count: {databaseFile.Length / pageSize}");
 }
 else
 {

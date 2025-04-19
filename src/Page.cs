@@ -124,7 +124,7 @@ public class Page
                 
                 var nameDataBuffer = new byte[nameDataSize];
                 var tableName = "";
-                ;
+                
                 if (typeValue == "table")
                 {
                     

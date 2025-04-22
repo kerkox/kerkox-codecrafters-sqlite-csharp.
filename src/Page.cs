@@ -11,22 +11,27 @@ public class Page
     public uint RightMostPointer { get; set; }
     public ushort BTreePageHeaderSize { get; set; }
     public List<string> FoundTableNames { get; } = new List<string>();
-    public List<Table> Tables { get; } = new List<Table>();
+    
     public readonly long PageOffset;
     public readonly Encoding DbEncoding;
     public readonly long DbPageSize;
+    public readonly string TableName;
+    public Table Table { get; }
     public long PageNumber { get; set; }
+    public int NumColumns { get; set; } = 0;
 
 
-    public Page(long pageOffset, Encoding dbEncoding, long dbPageSize, long pageNumber)
+    public Page(long pageOffset, Encoding dbEncoding, long dbPageSize, long pageNumber, Table table)
     {
         PageOffset = pageOffset;
         DbEncoding = dbEncoding;
         DbPageSize = dbPageSize;
         PageNumber = pageNumber;
+        Table = table;
+        TableName = table.Name;
     }
 
-    public void ReadHeader(Stream dbStream)
+    public virtual void ReadHeader(Stream dbStream)
     {
         dbStream.Seek(PageOffset, SeekOrigin.Begin);
         byte[] pageHeaderBuffer = new byte[12];
@@ -42,11 +47,6 @@ public class Page
         {
             CellContentAreaStart = 65536;
         }
-        else if (CellContentAreaStart == 0)
-        {
-            
-        }
-        
         
         BTreePageHeaderSize = PageType switch
         {
@@ -69,103 +69,206 @@ public class Page
         }
         // Console.WriteLine($"DEBUG: Read Header Page Offset={PageOffset}, Type=0x{PageType:X2}, NumCells={NumCells}, ContentStart={CellContentAreaStart}, HeaderSize={BTreePageHeaderSize}");
     }
-
-    public void ReadSchemaCells(Stream dbStream)
+    
+    public List<List<object>> ReadCells(Stream dbStream)
     {
-        if (PageType != 0x0D && PageType != 0x05)
+        if (PageType != 0x0D && PageType != 0x05 && PageType != 0x0A && PageType != 0x02)
         {
-            Console.WriteLine($"Advertenbcia: Se intentó leer celdas de esquema en una página no válida: {PageType:X2} en offset {PageOffset}");
-            return;
+            Console.WriteLine(
+                $"Advertencia: Se intentó leer celdas de esquema en una página no válida: {PageType:X2} en offset {PageOffset}");
+            return new List<List<object>>();
         }
+        long cellPointerArrayStart = PageOffset + BTreePageHeaderSize;
+        byte[] cellPointerBytes = new byte[2];
         
-        var cellPointerArrayStart = CellContentAreaStart;
-        var cellPointerBytes = new byte[2];
-        long nextCellPointerOffset = 0;
-
+        
+        // long nextCellPointerOffset = 0;
+        List<List<object>> results = new List<List<object>>();
         for (var i = 0; i < NumCells; i++)
         {
-            var absoluteCellOffset = cellPointerArrayStart + (i * 2) + nextCellPointerOffset;
-            dbStream.Seek(absoluteCellOffset, SeekOrigin.Begin);
+            // 1. Calcular la posición del puntero actual
+            long pointerLocation = cellPointerArrayStart + (i * 2);
             
+            // 2. Leer el valor del puntero (offset relativo de la celda)
+            dbStream.Seek(pointerLocation, SeekOrigin.Begin);
+            Helpers.ReadExactly(dbStream, cellPointerBytes, 0, 2);
+            ushort relativeCellOffset = Helpers.ReadUInt16BigEndian(cellPointerBytes);
+            
+            // 3. Calcular el offset absoluto de la celda en el archivo
+            //    ¡ESTE ES EL OFFSET DONDE COMIENZA LA CELDA!
+            long absoluteCellOffset = PageOffset + relativeCellOffset;
+            
+            // 4. Ir al inicio de la celda
+            dbStream.Seek(absoluteCellOffset, SeekOrigin.Begin);
+            var rowIdValue = -1;
             try
             {
                 if (PageType == 0x0D)
                 {
                     var (payloadSize, payloadBytes) = Helpers.ReadVarint(dbStream);
                     var (rowId, rowIdBytes) = Helpers.ReadVarint(dbStream);
-                    nextCellPointerOffset += payloadSize;
+                    rowIdValue = (int)rowId;
                 }
-                else
+                else if (PageType == 0x05)
                 {
-                    var leftChildPtrBytes = new byte[4];
+                    // Leer Puntero Hijo Izquierdo (4 bytes) y Clave (Varint)
+                    byte[] leftChildPtrBytes = new byte[4];
                     Helpers.ReadExactly(dbStream, leftChildPtrBytes, 0, 4);
+                    // uint leftChildPage = Helpers.ReadUInt32BigEndian(leftChildPtrBytes);
                     var (key, keyBytes) = Helpers.ReadVarint(dbStream);
+                    // Console.WriteLine($"      Interior Cell - Left Child: {leftChildPage}, Key: {key}");
+                    // Saltar al siguiente puntero, no hay datos de registro aquí.
                     continue;
                 }
                 
-                var (recordHeaderSize, recordHeaderBytes) = Helpers.ReadVarint(dbStream);
-                var (typeSerialCode, typeCodeBytes) = Helpers.ReadVarint(dbStream);
-                var (nameSerialCode, nameCodeBytes) = Helpers.ReadVarint(dbStream);
-                var (tblNameSerialCode, tblNameCodeBytes) = Helpers.ReadVarint(dbStream);
-                var (rootPageSerialCode, rootPageCodeBytes) = Helpers.ReadVarint(dbStream);
-                var (sqlSerialCode, sqlCodeBytes) = Helpers.ReadVarint(dbStream);
-
-                // 5. Calcular tamaños de datos
-                var typeDataSize = Helpers.CalculateDataSize(typeSerialCode);
-                var nameDataSize = Helpers.CalculateDataSize(nameSerialCode);
-                var tblNameDataSize = Helpers.CalculateDataSize(tblNameSerialCode);
-                var rootPageDataSize = Helpers.CalculateDataSize(rootPageSerialCode);
-                var sqlDataSize = Helpers.CalculateDataSize(sqlSerialCode);
-
-                // 6. Leer Cuerpo del Registro
-                var typeDataBuffer = new byte[typeDataSize];
-                Helpers.ReadExactly(dbStream, typeDataBuffer, 0, typeDataBuffer.Length);
-                var typeValue = DbEncoding.GetString(typeDataBuffer);
-                
-                var nameDataBuffer = new byte[nameDataSize];
-                var tableName = "";
-                
-                if (typeValue == "table")
+                var data = ReadRecord(dbStream);
+                if (rowIdValue != -1)
                 {
-                    
-                    Helpers.ReadExactly(dbStream, nameDataBuffer, 0, nameDataBuffer.Length);
-                    tableName = DbEncoding.GetString(nameDataBuffer);
-
-                    if (!tableName.StartsWith("sqlite_"))
-                    {
-                        FoundTableNames.Add(tableName);
-                        // Console.WriteLine($"      -> Found Table: {tableName}");
-                    }
-                    // else { Console.WriteLine($"      -> Skipping internal table: {tableName}"); }
-
-                    // Saltar el resto de los datos de esta celda si no los necesitas
-                    // dbStream.Seek(tblNameDataSize + rootPageDataSize + sqlDataSize, SeekOrigin.Current);
+                    data[0] = rowIdValue;
                 }
+                results.Add(data);
                 
-                var tblNameDataBuffer = new byte[tblNameDataSize];
-                Helpers.ReadExactly(dbStream, tblNameDataBuffer, 0, tblNameDataBuffer.Length);
-                var tblNameValue = DbEncoding.GetString(tblNameDataBuffer);
-                
-                var rootPageDataBuffer = new byte[rootPageDataSize];
-                Helpers.ReadExactly(dbStream, rootPageDataBuffer, 0, rootPageDataBuffer.Length);
-                
-                var sqlDataBuffer = new byte[sqlDataSize];
-                Helpers.ReadExactly(dbStream, sqlDataBuffer, 0, sqlDataBuffer.Length);
-                var sqlValue = DbEncoding.GetString(sqlDataBuffer);
-                
-                var table = new Table(typeValue, tableName, rootPageDataBuffer[0], tblNameValue,sqlValue);
-                Tables.Add(table);
-            }
-            catch (EndOfStreamException ex)
-            {
-                Console.Error.WriteLine($"Error (EOF) procesando celda {i} en offset {absoluteCellOffset}: {ex.Message}");
-                break;
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"Error inesperado procesando celda {i} en offset {absoluteCellOffset}: {ex.Message} {ex.StackTrace}");
-                // Considerar detenerse: break;
+                Console.WriteLine($"Error al leer la celda {i}: {ex.Message}");
             }
         }
+        return results;
+    }
+
+    private List<object> ReadRecord(Stream dbStream)
+    {
+        var (totalHeaderSize, headerSizeBytesRead) = Helpers.ReadVarint(dbStream);
+        var bytesReadForTypeCodes = 0L;
+        var totalBytesReadInHeader = headerSizeBytesRead;
+        var serialTypeCodes = new List<long>();
+        while(totalBytesReadInHeader < totalHeaderSize)
+        {
+            var (typeSerialCode, typeCodeBytes) = Helpers.ReadVarint(dbStream);
+            serialTypeCodes.Add(typeSerialCode);
+            bytesReadForTypeCodes += typeCodeBytes;
+            totalBytesReadInHeader += typeCodeBytes;
+
+            if (totalBytesReadInHeader > totalHeaderSize)
+            {
+                throw new InvalidDataException($"Se leyeron más butes ({totalBytesReadInHeader}]) para la cabecera de los indicados ({totalHeaderSize}");
+            }
+            
+        }
+        
+        var recordData = new List<object>();
+        foreach (var serialTypeCode in serialTypeCodes)
+        {
+            var typeValue = ReadColumnData(dbStream, serialTypeCode);
+            recordData.Add(typeValue);
+        }
+        return recordData;
+    }
+
+    private object ReadColumnData(Stream dbStream, long serialTypeCode)
+    {
+        switch(serialTypeCode)  
+        {
+            case 0:
+                return new object();
+            case 1:
+                return (sbyte)dbStream.ReadByte();
+            case 2:
+            {
+                var buffer = new byte[2];
+                Helpers.ReadExactly(dbStream, buffer, 0, 2);
+                return Helpers.ReadInt16BigEndian(buffer);
+            }
+            case 3:
+            {
+                var buffer = new byte[3];
+                Helpers.ReadExactly(dbStream, buffer, 0, 3);
+                return Helpers.ReadInt24BigEndian(buffer);
+            }
+            case 4:
+            {
+                var buffer = new byte[4];
+                Helpers.ReadExactly(dbStream, buffer, 0, 4);
+                return Helpers.ReadInt32BigEndian(buffer);
+            }
+            case 5:
+            {
+                var buffer = new byte[6];
+                Helpers.ReadExactly(dbStream, buffer, 0, 6);
+                return Helpers.ReadInt48BigEndian(buffer);
+            }
+            case 6:
+            {
+                var buffer = new byte[8];
+                Helpers.ReadExactly(dbStream, buffer, 0, 8);
+                return Helpers.ReadInt64BigEndian(buffer);
+            }
+            case 7:
+            {
+                var buffer = new byte[8];
+                Helpers.ReadExactly(dbStream, buffer, 0, 8);
+                if (BitConverter.IsLittleEndian) Array.Reverse(buffer);
+                return BitConverter.ToDouble(buffer, 0);
+            }
+            case 8:
+                return 0L;
+            case 9:
+                return 1L;
+            default:
+                if (serialTypeCode < 12)
+                {
+                    Console.WriteLine($"Not supported type {serialTypeCode}");
+                    return new object();
+                }
+
+                long dataSize;
+                bool isText;
+                if (serialTypeCode % 2 == 0)
+                {
+                    dataSize = (serialTypeCode - 12) / 2;
+                    isText = false;
+                }
+                else
+                {
+                    dataSize = (serialTypeCode - 13) / 2;
+                    isText = true;
+                }
+
+                if (dataSize == 0)
+                {
+                    return isText ? (object)"" : (object)Array.Empty<byte>();
+                }
+                
+                byte[] dataBuffer = new byte[dataSize];
+                Helpers.ReadExactly(dbStream, dataBuffer, 0, dataBuffer.Length);
+
+                if (isText)
+                {
+                    return DbEncoding.GetString(dataBuffer);
+                }
+                else
+                {
+                    return dataBuffer;
+                }
+        }
+    }
+    
+    public List<T> GetFieldValues<T>(string fieldName, Stream dbStream)
+    {
+        var fieldValues = new List<T>();
+        var rows = ReadCells(dbStream);
+        foreach (var row in rows)
+        {
+            if (row.Count == 0) continue;
+            var fieldIndex = Table.GetColumnIndex(fieldName);
+            if (fieldIndex < 0 || fieldIndex >= row.Count) continue;
+            var fieldValue = row[fieldIndex];
+            if (fieldValue is T value)
+            {
+                fieldValues.Add(value);
+            }
+        }
+        return fieldValues;
     }
 }

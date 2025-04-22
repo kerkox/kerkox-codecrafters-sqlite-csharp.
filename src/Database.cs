@@ -7,7 +7,8 @@ public class Database : IDisposable
     private string DbPath { get; }
     public Encoding DbEncoding { get; }
     public long DbPageSize { get; }
-    public List<Page> Pages { get; } = new List<Page>();
+    public RootPage RootPage { get; set;  }
+    public Dictionary<int, Page> Pages { get; } = new Dictionary<int, Page>();
     private FileStream _databaseStream;
     
 
@@ -22,75 +23,65 @@ public class Database : IDisposable
         byte[] pageSizeBytes = new byte[2];
         Helpers.ReadExactly(_databaseStream, pageSizeBytes, 0, 2);
         DbPageSize = Helpers.ReadUInt16BigEndian(pageSizeBytes);
-        LoadSpecificPage(1);
+        RootPage = LoadRootPage();
+    }
+    
+    public List<T> GetFieldValuesFromTable<T>(string tableName, string fieldName)
+    {
+        var table = RootPage.Tables.FirstOrDefault(t => t.Name.Equals(tableName, StringComparison.OrdinalIgnoreCase));
+        if (table == null) return new List<T>();
+        var indexField = GetColumnIndex(fieldName, table);
+        LoadSpecificPage(table.RootPage);
+        var page = Pages[table.RootPage];
+        var fieldValues = page.GetFieldValues<T>(fieldName, _databaseStream) ?? new List<T>();
+        return fieldValues;
+    }
+    
+    private int GetColumnIndex(string fieldName, Table table)
+    {
+        var columnIndex = table.Sql
+            .Split(new[] { '(', ',', ')' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select((col, index) => new { col, index })
+            .FirstOrDefault(x => x.col.Trim().Equals(fieldName, StringComparison.OrdinalIgnoreCase))?.index;
+        return columnIndex ?? -1;
     }
     
     public int GetNumberOfRowsFromTable(string tableName)
     {
-        var page1 = Pages.FirstOrDefault(p => p.PageOffset == 100);
-        if (page1 == null)
-        {
-            LoadSpecificPage(1);
-            page1 = Pages.FirstOrDefault(p => p.PageOffset == 100);
-        }
-        
-        var table = page1?.Tables.FirstOrDefault(t => t.Name.Equals(tableName, StringComparison.OrdinalIgnoreCase));
+        var table = RootPage.Tables.FirstOrDefault(t => t.Name.Equals(tableName, StringComparison.OrdinalIgnoreCase));
         if (table == null) return 0;
         LoadSpecificPage(table.RootPage);
-        var numRows = Pages.FirstOrDefault(p => p.PageNumber == table.RootPage)?.NumCells ?? 0;
+        var numRows = Pages[table.RootPage]?.NumCells ?? 0;
         return numRows;
     }
-    
-    public void LoadSpecificPage(int pageNumber)
+
+    private int LoadSpecificPage(int pageNumber)
     {
         if(pageNumber < 1) throw new ArgumentOutOfRangeException(nameof(pageNumber));
-        long pageOffset = (pageNumber == 1) ? 100 : (long)(pageNumber - 1) * DbPageSize;
-        if (pageOffset < _databaseStream.Length)
-        {
-            var page = new Page(pageOffset, DbEncoding, DbPageSize, pageNumber);
-
-            page.ReadHeader(_databaseStream);
-
-            if (pageNumber == 1)
-            {
-                page.ReadSchemaCells(_databaseStream);
-            }
-            Pages.Add(page);
-        }
+        var pageOffset = (long)(pageNumber - 1) * DbPageSize;
+        if (pageNumber == 1) return 1;
+        if (pageOffset >= _databaseStream.Length) return 0;
+        var table = RootPage.Tables.FirstOrDefault(t => t.RootPage == pageNumber);
+        if (table == null) return 0; // Table not found
+        var page = new Page(pageOffset, DbEncoding, DbPageSize, pageNumber, table);
+        page.ReadHeader(_databaseStream);
+        Pages.Add(pageNumber, page);
+        return 1;
     }
-    
-    private void LoadAllPages()
+
+    private RootPage LoadRootPage()
     {
-        if(_databaseStream.Length > 100)
-        {   
-            var page1 = new Page(100, DbEncoding, DbPageSize, 1);
-            page1.ReadHeader(_databaseStream);
-            Pages.Add(page1);
-        }
-        
-        long pageOffset = DbPageSize;
-        long pageNumber = 2;
-        while (pageOffset < _databaseStream.Length)
-        {
-            // databaseFile.Seek(pageOffset, SeekOrigin.Begin);
-            var page = new Page(pageOffset, DbEncoding, DbPageSize, pageNumber);
-            page.ReadHeader(_databaseStream);
-            Pages.Add(page);
-            pageNumber++;
-            pageOffset += DbPageSize; // Move to the next page
-        }
+        const long pageOffset = 100;
+        const int pageNumber = 1;
+        var rootPage = new RootPage(pageOffset, DbEncoding, DbPageSize, pageNumber);
+        rootPage.ReadHeader(_databaseStream);
+        rootPage.ReadSchemaCells(_databaseStream);
+        return rootPage;
     }
 
     public IEnumerable<string> GetTableNames()
     {
-        var page1 = Pages.FirstOrDefault(p => p.PageOffset == 100);
-        if (page1 == null)
-        {
-            LoadSpecificPage(1);
-            page1 = Pages.FirstOrDefault(p => p.PageOffset == 100);
-        }
-        
-        return page1?.FoundTableNames ?? Enumerable.Empty<string>();
+        return RootPage.FoundTableNames;
     }
     
     public void Dispose()
@@ -98,21 +89,4 @@ public class Database : IDisposable
         _databaseStream?.Dispose();
         GC.SuppressFinalize(this);
     }
-    
-    // private void LoadPages()
-    // {
-    //     using var databaseFile = File.OpenRead(DbPath);
-    //     var page = new Page(DbPath, 100, DbEncoding);
-    //     page.ReadCells();
-    //     Pages.Add(page);
-    //     long pageOffset = DbPageSize;
-    //     while (pageOffset < databaseFile.Length)
-    //     {
-    //         // databaseFile.Seek(pageOffset, SeekOrigin.Begin);
-    //         var newPage = new Page(DbPath, pageOffset, DbEncoding);
-    //         newPage.ReadCells();
-    //         Pages.Add(newPage);
-    //         pageOffset += DbPageSize; // Move to the next page
-    //     }
-    // }
 }

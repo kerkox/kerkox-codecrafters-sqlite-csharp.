@@ -116,4 +116,46 @@ public static class Helpers
     {
         return BinaryPrimitives.ReadUInt32BigEndian(buffer.AsSpan(offset));
     }
+    
+    public static short ReadInt16BigEndian(byte[] buffer, int offset = 0)
+    {
+        return BinaryPrimitives.ReadInt16BigEndian(buffer.AsSpan(offset));
+    }
+
+    public static int ReadInt24BigEndian(byte[] buffer, int offset = 0)
+    {
+        // Leer 3 bytes BE como entero con signo
+        int value = (buffer[offset] << 16) | (buffer[offset + 1] << 8) | buffer[offset + 2];
+        // Extender signo si el bit más significativo del primer byte es 1
+        if ((buffer[offset] & 0x80) != 0) 
+        {
+            value |= unchecked((int)0xFF000000); // Rellenar con 1s a la izquierda
+        }
+
+        return value;
+    }
+    
+    public static int ReadInt32BigEndian(byte[] buffer, int offset = 0)
+    {
+        return BinaryPrimitives.ReadInt32BigEndian(buffer.AsSpan(offset));
+    }
+
+    public static long ReadInt48BigEndian(byte[] buffer, int offset = 0)
+    {
+        // Leer 6 bytes BE como entero con signo
+        long value = ((long)buffer[offset] << 40) | ((long)buffer[offset + 1] << 32) |
+                     ((long)buffer[offset + 2] << 24) | ((long)buffer[offset + 3] << 16) |
+                     ((long)buffer[offset + 4] << 8) | buffer[offset + 5];
+        // Extender signo si el bit más significativo del primer byte es 1
+        if ((buffer[offset] & 0x80) != 0)
+        {
+            value |= unchecked((long)0xFF_FF_00_00_00_00_00_00);
+        }
+        return value;
+    }
+    
+    public static long ReadInt64BigEndian(byte[] buffer, int offset = 0)
+    {
+        return BinaryPrimitives.ReadInt64BigEndian(buffer.AsSpan(offset));
+    }
 }

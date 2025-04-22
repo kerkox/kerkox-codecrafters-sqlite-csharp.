@@ -49,6 +49,22 @@ public class SqlExecute
         using var databaseFile = File.OpenRead(_dbPath);
         // Implement SELECT command logic here
         // Console.WriteLine($"Executing SELECT command: {sql}");
+        if (sql.Contains("COUNT", StringComparison.InvariantCultureIgnoreCase))
+        {
+            CountCommand(sql);
+            return;
+        }
+        var parts = sql.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var tableName = parts.Last();
+        var columns = parts.Skip(1).Take(parts.Length - 2).ToArray();
+        using var database = new Database(_dbPath);
+        var values = database.GetFieldValuesFromTable<string>(tableName, columns[0]);
+        Console.WriteLine($"{string.Join("\n", values)}");
+    }
+
+    
+    private void CountCommand(string sql)
+    {
         var parts = sql.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         var tableName = parts.Last();
         var columns = parts.Skip(1).Take(parts.Length - 2).ToArray();
@@ -56,8 +72,6 @@ public class SqlExecute
             !columns.Any(c => c.Contains("COUNT", StringComparison.InvariantCultureIgnoreCase))) return;
         using var database = new Database(_dbPath);
         var numCells = database.GetNumberOfRowsFromTable(tableName);
-        // page3.ReadCells();
-        // Console.WriteLine($"Number of rows in table {tableName}: {page.NumCells}");
         Console.WriteLine($"{numCells}");
     }
 }

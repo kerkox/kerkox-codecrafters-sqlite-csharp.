@@ -8,8 +8,6 @@ var (path, command) = args.Length switch
     _ => (args[0], args[1])
 };
 
-using var databaseFile = File.OpenRead(path);
-
 switch (command)
 {
     // Parse command and act accordingly

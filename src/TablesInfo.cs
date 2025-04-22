@@ -15,13 +15,7 @@ public class TablesInfo
     public void PrintTables()
     {
         using var database = new Database(_dbPath);
-        var page = database.Pages.Where(p => p.PageNumber == 1).ToList().FirstOrDefault();
-        if (page == null)
-        {
-            Console.WriteLine("No pages found in the database.");
-            return;
-        }
-        var tableNames = page.Tables
+        var tableNames = database.RootPage.Tables
             .Where(t => !t.Name.StartsWith("sqlite_"))
             .Select(t => t.Name).ToList();
         tableNames.Reverse();

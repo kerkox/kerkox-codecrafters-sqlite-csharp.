@@ -56,10 +56,11 @@ public class SqlExecute
         }
         var parts = sql.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         var tableName = parts.Last();
-        var columns = parts.Skip(1).Take(parts.Length - 2).ToArray();
+        var columns = parts.Skip(1).Take(parts.Length - 3).Select(col => col.Replace(",", "").Trim()).ToArray();
         using var database = new Database(_dbPath);
-        var values = database.GetFieldValuesFromTable<string>(tableName, columns[0]);
-        Console.WriteLine($"{string.Join("\n", values)}");
+        var values = database.GetFieldValuesFromTable(tableName, columns);
+        var rows = values.Select(v => string.Join("|", v)).ToList();
+        Console.WriteLine($"{string.Join("\n", rows)}");
     }
 
     

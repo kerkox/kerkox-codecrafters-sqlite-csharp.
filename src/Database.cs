@@ -26,14 +26,13 @@ public class Database : IDisposable
         RootPage = LoadRootPage();
     }
     
-    public List<T> GetFieldValuesFromTable<T>(string tableName, string fieldName)
+    public List<List<object>> GetFieldValuesFromTable(string tableName, string[] fieldNames)
     {
         var table = RootPage.Tables.FirstOrDefault(t => t.Name.Equals(tableName, StringComparison.OrdinalIgnoreCase));
-        if (table == null) return new List<T>();
-        var indexField = GetColumnIndex(fieldName, table);
+        if (table == null) return new List<List<object>>();
         LoadSpecificPage(table.RootPage);
         var page = Pages[table.RootPage];
-        var fieldValues = page.GetFieldValues<T>(fieldName, _databaseStream) ?? new List<T>();
+        var fieldValues = page.GetFieldValues(fieldNames, _databaseStream);
         return fieldValues;
     }
     

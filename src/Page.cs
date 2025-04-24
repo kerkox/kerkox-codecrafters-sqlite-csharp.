@@ -254,21 +254,23 @@ public class Page
         }
     }
     
-    public List<T> GetFieldValues<T>(string fieldName, Stream dbStream)
+    public List<List<object>> GetFieldValues(string[] fieldNames, Stream dbStream)
     {
-        var fieldValues = new List<T>();
+        var selectedFieldValues = new List<List<object>>();
         var rows = ReadCells(dbStream);
         foreach (var row in rows)
         {
             if (row.Count == 0) continue;
-            var fieldIndex = Table.GetColumnIndex(fieldName);
-            if (fieldIndex < 0 || fieldIndex >= row.Count) continue;
-            var fieldValue = row[fieldIndex];
-            if (fieldValue is T value)
+            var fieldIndexes = fieldNames.Select(fieldName => Table.GetColumnIndex(fieldName)).ToList();
+            if (fieldIndexes.Any(fieldIndex => (fieldIndex < 0 || fieldIndex >= row.Count))) continue;
+            var selectedRow = new List<object>();
+            fieldIndexes.ForEach(fieldIndex =>
             {
-                fieldValues.Add(value);
-            }
+                var fieldValue = row[fieldIndex];
+                selectedRow.Add(fieldValue);
+            });
+            selectedFieldValues.Add(selectedRow);
         }
-        return fieldValues;
+        return selectedFieldValues;
     }
 }

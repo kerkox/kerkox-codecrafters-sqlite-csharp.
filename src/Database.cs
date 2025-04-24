@@ -26,7 +26,7 @@ public class Database : IDisposable
         RootPage = LoadRootPage();
     }
     
-    public List<List<object>> GetFieldValuesFromTable(string tableName, string[] fieldNames)
+    public List<List<object>>  GetFieldValuesFromTable(string tableName, string[] fieldNames)
     {
         var table = RootPage.Tables.FirstOrDefault(t => t.Name.Equals(tableName, StringComparison.OrdinalIgnoreCase));
         if (table == null) return new List<List<object>>();

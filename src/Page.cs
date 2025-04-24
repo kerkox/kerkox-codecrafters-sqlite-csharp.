@@ -70,7 +70,7 @@ public class Page
         // Console.WriteLine($"DEBUG: Read Header Page Offset={PageOffset}, Type=0x{PageType:X2}, NumCells={NumCells}, ContentStart={CellContentAreaStart}, HeaderSize={BTreePageHeaderSize}");
     }
     
-    public List<List<object>> ReadCells(Stream dbStream)
+    public List<List<object>> ReadCells(Stream dbStream, Dictionary<int, string> filters)
     {
         if (PageType != 0x0D && PageType != 0x05 && PageType != 0x0A && PageType != 0x02)
         {
@@ -125,6 +125,25 @@ public class Page
                 if (rowIdValue != -1)
                 {
                     data[0] = rowIdValue;
+                }
+                // Here we can filter the data based on the filters
+                if (filters != null && filters.Count > 0)
+                {
+                    var addColumn = true;
+                    foreach (var filter in filters)
+                    {
+                        var columnIndex = filter.Key;
+                        var columnValue = filter.Value;
+                        string dataValue = data[columnIndex].ToString() ?? string.Empty;
+                        if (columnIndex < 0 || columnIndex >= data.Count || !dataValue.Contains(columnValue))
+                        {
+                            addColumn = false;
+                        }
+                    }
+                    if (!addColumn)
+                    {
+                        continue;
+                    }
                 }
                 results.Add(data);
                 
@@ -254,10 +273,13 @@ public class Page
         }
     }
     
-    public List<List<object>> GetFieldValues(string[] fieldNames, Stream dbStream)
+    public List<List<object>> GetFieldValues(string[] fieldNames, Stream dbStream, Dictionary<string, string> filters = null)
     {
         var selectedFieldValues = new List<List<object>>();
-        var rows = ReadCells(dbStream);
+        var filtersByIndexColumn = filters.Select(f => new { ColumnName = f.Key, ColumnValue = f.Value })
+            .ToDictionary(f => Table.GetColumnIndex(f.ColumnName), f => f.ColumnValue);
+        
+        var rows = ReadCells(dbStream, filtersByIndexColumn);
         foreach (var row in rows)
         {
             if (row.Count == 0) continue;

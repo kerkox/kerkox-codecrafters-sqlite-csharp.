@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace codecrafters_sqlite;
 
 public class SqlExecute
@@ -55,15 +57,54 @@ public class SqlExecute
             return;
         }
         var parts = sql.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        var tableName = parts.Last();
-        var columns = parts.Skip(1).Take(parts.Length - 3).Select(col => col.Replace(",", "").Trim()).ToArray();
+        
+        var tableName = GetTableNameFromSql(sql);
+        var columns = GetColumnsFromSql(sql);
+        // filters are taken with regular expression:
+        var filters = sql.Split(new[] { "WHERE" }, StringSplitOptions.RemoveEmptyEntries)
+            .Skip(1)
+            .SelectMany(f => f.Split(new[] { "AND", "OR" }, StringSplitOptions.RemoveEmptyEntries))
+            .Select(f => new { Column = f.Trim().Split('=')[0].Trim(), Value = f.Trim().Split('=')[1].Trim().Replace("'", "") })
+            .ToDictionary(k => k.Column, v => v.Value);
         using var database = new Database(_dbPath);
-        var values = database.GetFieldValuesFromTable(tableName, columns);
+        var values = database.GetFieldValuesFromTable(tableName, columns, filters);
         var rows = values.Select(v => string.Join("|", v)).ToList();
         Console.WriteLine($"{string.Join("\n", rows)}");
     }
 
+    private string GetTableNameFromSql(string sql)
+    {
+        string tableName;
+        const string expression = @"(?:FROM\s+([\w]+))";
+        var regex = new Regex(expression, RegexOptions.IgnoreCase);
+        var match = regex.Match(sql);
+        if (match.Success)
+        {
+            tableName = match.Groups[1].Value;
+        }
+        else
+        {
+            throw new Exception("Table name not found in SQL query.");
+        }
+
+        return tableName;
+
+    }
+
+    private string[] GetColumnsFromSql(string sql)
+    {
+        const string expression = @"SELECT(?:\s+DISTINCT)?\s+(.*?)\s+FROM";
+        var regex = new Regex(expression, RegexOptions.IgnoreCase);
+        var match = regex.Match(sql);
+        if (!match.Success) throw new Exception("Columns not found in SQL query.");
+        
+        var columns = match.Groups[1].Value;
+        return columns.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(c => c.Trim()).ToArray();
+    }
     
+
+
     private void CountCommand(string sql)
     {
         var parts = sql.Split(' ', StringSplitOptions.RemoveEmptyEntries);

@@ -273,7 +273,7 @@ public class Page
         }
     }
     
-    public List<List<object>> GetFieldValues(string[] fieldNames, Stream dbStream, Dictionary<string, string> filters = null)
+    public List<List<object>> GetFieldValues(string[] fieldNames, Stream dbStream, Dictionary<string, string> filters)
     {
         var selectedFieldValues = new List<List<object>>();
         var filtersByIndexColumn = filters.Select(f => new { ColumnName = f.Key, ColumnValue = f.Value })

@@ -61,7 +61,7 @@ public class SqlExecute
         var tableName = GetTableNameFromSql(sql);
         var columns = GetColumnsFromSql(sql);
         // filters are taken with regular expression:
-        var filters = sql.Split(new[] { "WHERE" }, StringSplitOptions.RemoveEmptyEntries)
+        var filters = sql.Split(new[] { "WHERE", "where" }, StringSplitOptions.RemoveEmptyEntries)
             .Skip(1)
             .SelectMany(f => f.Split(new[] { "AND", "OR" }, StringSplitOptions.RemoveEmptyEntries))
             .Select(f => new { Column = f.Trim().Split('=')[0].Trim(), Value = f.Trim().Split('=')[1].Trim().Replace("'", "") })

@@ -17,7 +17,7 @@ public class RootPage : Page
         return new Table("table", "sqlite_schema", 1, "sqlite_schmea", "");
     }
     
-    public override void ReadHeader(Stream dbStream)
+    public void ReadHeader(Stream dbStream)
     {
         dbStream.Seek(PageOffset, SeekOrigin.Begin);
         byte[] pageHeaderBuffer = new byte[12];
@@ -26,7 +26,7 @@ public class RootPage : Page
         
         PageType = pageHeaderBuffer[0];
         
-        NumCells = Helpers.ReadUInt16BigEndian(pageHeaderBuffer, 3);
+        CellCount = Helpers.ReadUInt16BigEndian(pageHeaderBuffer, 3);
         CellContentAreaStart = Helpers.ReadUInt16BigEndian(pageHeaderBuffer, 5);
 
         if (CellContentAreaStart == 0 && DbPageSize == 65536)
@@ -70,7 +70,7 @@ public class RootPage : Page
         var cellPointerBytes = new byte[2];
         long nextCellPointerOffset = 0;
 
-        for (var i = 0; i < NumCells; i++)
+        for (var i = 0; i < CellCount; i++)
         {
             var absoluteCellOffset = cellPointerArrayStart + (i * 2) + nextCellPointerOffset;
             dbStream.Seek(absoluteCellOffset, SeekOrigin.Begin);

@@ -67,7 +67,7 @@ public class SqlExecute
             .Select(f => new { Column = f.Trim().Split('=')[0].Trim(), Value = f.Trim().Split('=')[1].Trim().Replace("'", "") })
             .ToDictionary(k => k.Column, v => v.Value);
         using var database = new Database(_dbPath);
-        var values = database.GetFieldValuesFromTable(tableName, columns, filters);
+        var values = database.GetFieldValuesFromTableWithBTree(tableName, columns, filters);
         var rows = values.Select(v => string.Join("|", v)).ToList();
         Console.WriteLine($"{string.Join("\n", rows)}");
     }

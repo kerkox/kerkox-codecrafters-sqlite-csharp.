@@ -52,7 +52,7 @@ public static class Helpers
         }
     }
     
-    public static (long value, int bytesRead) ReadVarint(Stream stream)
+    public static (long value, int bytesRead) ReadVarint(this Stream stream)
     {
         long value = 0;
         int bytesRead = 0;
@@ -92,7 +92,7 @@ public static class Helpers
         return (value, bytesRead);
     }
     
-    public static void ReadExactly(Stream stream, byte[] buffer, int offset, int count)
+    public static void ReadExactly(this Stream stream, byte[] buffer, int offset, int count)
     {
         int totalBytesRead = 0;
         while (totalBytesRead < count)

@@ -93,12 +93,12 @@ public static class HelperExtensions
     
     public static List<object> ReadRecord(this Stream dbStream)
     {
-        var (totalHeaderSize, headerSizeBytesRead) = Helpers.ReadVarint(dbStream);
+        var (totalHeaderSize, headerSizeBytesRead) = dbStream.ReadVarint();
         var totalBytesReadInHeader = headerSizeBytesRead;
         var serialTypeCodes = new List<long>();
         while(totalBytesReadInHeader < totalHeaderSize)
         {
-            var (typeSerialCode, typeCodeBytes) = Helpers.ReadVarint(dbStream);
+            var (typeSerialCode, typeCodeBytes) = dbStream.ReadVarint();
             serialTypeCodes.Add(typeSerialCode);
             totalBytesReadInHeader += typeCodeBytes;
 

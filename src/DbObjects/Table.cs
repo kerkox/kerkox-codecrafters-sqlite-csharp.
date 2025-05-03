@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace codecrafters_sqlite;
+namespace codecrafters_sqlite.DbObjects;
 
 public class Table
 {
@@ -26,7 +26,7 @@ public class Table
     
     public void LoadColumnNames()
     {
-        var regexColumns = @"(?<=\(\s*|,\s*)(\w+)";
+        var regexColumns = @"(?<=\(\s*|,\s*)([\w]+|""[\w\s]+"")";
         var regex = new Regex(regexColumns, RegexOptions.IgnoreCase | RegexOptions.Multiline);
         if (string.IsNullOrEmpty(Sql)) return;
         var matches = regex.Matches(Sql);
@@ -34,7 +34,7 @@ public class Table
         {
             if (match.Groups.Count > 1)
             {
-                ColumnNames.Add(match.Groups[1].Value);
+                ColumnNames.Add(match.Groups[1].Value.Replace("\"", "").ToLowerInvariant());
             }
         }
         NumColumns = ColumnNames.Count;
@@ -42,7 +42,7 @@ public class Table
 
     public int GetColumnIndex(string columnName)
     {
-        return ColumnNames.IndexOf(columnName);
+        return ColumnNames.IndexOf(Regex.Replace(columnName, "\"|\'", "").ToLowerInvariant());
     }
     
 }

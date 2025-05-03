@@ -49,10 +49,8 @@ public class BTreeTableLeafPage : BTreePage
                 rowIdValue = (int)rowId;
                 
                 var data = dbStream.ReadRecord();
-                if (rowIdValue != -1)
-                {
-                    data[0] = rowIdValue;
-                }
+                data[0] = rowIdValue;
+
                 // Here we can filter the data based on the filters
                 if (filters != null && filters.Count > 0)
                 {
@@ -61,10 +59,19 @@ public class BTreeTableLeafPage : BTreePage
                     {
                         var columnIndex = filter.Key;
                         var columnValue = filter.Value;
-                        string dataValue = data[columnIndex].ToString() ?? string.Empty;
-                        if (columnIndex < 0 || columnIndex >= data.Count || !dataValue.Contains(columnValue))
+                        
+                        if (columnIndex < 0 || columnIndex >= data.Count)
                         {
                             addColumn = false;
+                            break;
+                        }
+
+                        string dataValue = data[columnIndex].ToString() ?? string.Empty;
+
+                        if (!dataValue.Contains(columnValue))
+                        {
+                            addColumn = false;
+                            break;
                         }
                     }
                     if (!addColumn)

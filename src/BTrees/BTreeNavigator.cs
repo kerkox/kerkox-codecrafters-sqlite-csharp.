@@ -1,5 +1,5 @@
-using System.Collections;
 using System.Text;
+using codecrafters_sqlite.DbObjects;
 
 namespace codecrafters_sqlite.Btrees;
 
@@ -24,23 +24,7 @@ public class BTreeNavigator
     {
         _results.Clear();
         TraverseAndRead(PageNumber, dbStream, fieldNames, filters);
-        return SelectFields(fieldNames);
-        // return _results;
-        // while (true)
-        // {
-        //     var pageOffset = (long)(PageNumber - 1) * DbPageSize;
-        //     var btreePage = BTreePageFactory.CreatePage(dbStream, pageOffset, DbEncoding, DbPageSize, PageNumber, Table);
-        //     switch (btreePage)
-        //     {
-        //         case BTreeTableLeafPage tableLeafPage:
-        //             return GetFieldValues(tableLeafPage, dbStream, fieldNames, filters);                    
-        //         case BTreeTableInteriorPage tableInteriorPage:
-        //             PageNumber = tableInteriorPage.GetLeftChildPage(dbStream);
-        //             continue;
-        //     }
-        //     break;
-        // }
-        // return Data;
+        return SelectFields(fieldNames);        
     }
 
     private void TraverseAndRead(uint currentPageNumber, Stream dbStream, string[] fieldNames, Dictionary<string, string> filters)
@@ -91,7 +75,7 @@ public class BTreeNavigator
         }
         catch (ArgumentException e)
         {
-            Console.Error.WriteLine($"Error selecfionando campos: {e.Message}");
+            Console.Error.WriteLine($"Error seleccionando campos: {e.Message}");
             return new List<List<object>>();
         }
 

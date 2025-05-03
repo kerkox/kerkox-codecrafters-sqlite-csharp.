@@ -1,4 +1,5 @@
 using System.Text;
+using codecrafters_sqlite.DbObjects;
 
 namespace codecrafters_sqlite.Btrees;
 

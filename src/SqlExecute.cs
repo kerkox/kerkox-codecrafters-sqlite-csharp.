@@ -51,7 +51,7 @@ public class SqlExecute
         using var databaseFile = File.OpenRead(_dbPath);
         // Implement SELECT command logic here
         // Console.WriteLine($"Executing SELECT command: {sql}");
-        if (sql.Contains("COUNT", StringComparison.InvariantCultureIgnoreCase))
+        if (sql.Contains("COUNT(", StringComparison.InvariantCultureIgnoreCase))
         {
             CountCommand(sql);
             return;
